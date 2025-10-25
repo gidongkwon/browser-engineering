@@ -1,5 +1,6 @@
 import socket
 import ssl
+from consts import entities
 
 
 class URL:
@@ -27,10 +28,10 @@ class URL:
                 self.host, port = self.host.split(":", 1)
                 self.port = int(port)
         else:
-            assert self.scheme in ["data"]
+            assert self.scheme in ["data", "view-source"]
             self.path = url
 
-    def request(self):
+    def request(self) -> str:
         if self.scheme == "file":
             with open(self.path, "r") as file:
                 return file.read()
@@ -38,6 +39,13 @@ class URL:
         if self.scheme == "data":
             mediatype, data = self.path.split(",", 1)
             return data
+
+        if self.scheme == "view-source":
+            source_url = URL(self.path)
+            response = source_url.request()
+            for entity, target in entities.items():
+                response = response.replace(target, entity)
+            return response
 
         s = socket.socket(
             family=socket.AF_INET,

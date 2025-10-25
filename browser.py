@@ -1,6 +1,5 @@
 from url import URL
-
-entities = {"&lt;": "<", "&gt;": ">"}
+from consts import entities
 
 
 def lookahead(string: str, index: int, count: int):
