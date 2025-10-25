@@ -1,0 +1,3 @@
+Hello, this is text-only browser!
+You can use it by:
+python browser.py [url]
