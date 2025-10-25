@@ -34,8 +34,11 @@ class URL:
 
         s.connect((self.host, self.port))
 
-        request = f"GET {self.path} HTTP/1.0\r\n"
-        request += f"Host: {self.host}\r\n"
+        default_headers = {"Host": self.host, "Connection": "close"}
+
+        request = f"GET {self.path} HTTP/1.1\r\n"
+        for header, content in default_headers.items():
+            request += f"{header}: {content}\r\n"
         request += "\r\n"
         s.send(request.encode("utf-8"))
 
