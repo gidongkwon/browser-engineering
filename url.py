@@ -4,27 +4,40 @@ import ssl
 
 class URL:
     def __init__(self, url: str):
-        self.scheme, url = url.split("://", 1)
-        assert self.scheme in ["http", "https", "file"]
+        self.scheme, url = url.split(":", 1)
 
-        if "/" not in url:
-            url = url + "/"
-        self.host, url = url.split("/", 1)
-        self.path = "/" + url
+        # https://datatracker.ietf.org/doc/html/rfc3986
+        has_authority = url.startswith("//")
+        if has_authority:
+            url = url[2:]
 
-        if self.scheme == "http":
-            self.port = 80
-        elif self.scheme == "https":
-            self.port = 443
+            assert self.scheme in ["http", "https", "file"]
 
-        if ":" in self.host:
-            self.host, port = self.host.split(":", 1)
-            self.port = int(port)
+            if "/" not in url:
+                url = url + "/"
+            self.host, url = url.split("/", 1)
+            self.path = "/" + url
+
+            if self.scheme == "http":
+                self.port = 80
+            elif self.scheme == "https":
+                self.port = 443
+
+            if ":" in self.host:
+                self.host, port = self.host.split(":", 1)
+                self.port = int(port)
+        else:
+            assert self.scheme in ["data"]
+            self.path = url
 
     def request(self):
         if self.scheme == "file":
             with open(self.path, "r") as file:
                 return file.read()
+
+        if self.scheme == "data":
+            mediatype, data = self.path.split(",", 1)
+            return data
 
         s = socket.socket(
             family=socket.AF_INET,
