@@ -100,6 +100,17 @@ class URL:
 
         length = int(response_headers["content-length"])
 
+        match int(status):
+            case 304:
+                pass
+            case status if status > 300 and status < 400:
+                assert "location" in response_headers
+                redirect_to = response_headers["location"]
+                if redirect_to.startswith("/"):
+                    return URL(f"{self.origin}{redirect_to}").request()
+                return URL(redirect_to).request()
+                
+
         content_bytes = response.read(length)
         content = content_bytes.decode()
 
