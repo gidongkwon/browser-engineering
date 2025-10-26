@@ -18,6 +18,7 @@ class URL:
                 url = url + "/"
             self.host, url = url.split("/", 1)
             self.path = "/" + url
+            self.port: int | None = None
 
             if self.scheme == "http":
                 self.port = 80
