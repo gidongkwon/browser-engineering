@@ -2,6 +2,7 @@ from cache_storage import cache_storage
 import socket
 import ssl
 from consts import entities
+import gzip
 
 connection_pool: dict[str, socket.socket] = {}
 
@@ -80,6 +81,7 @@ class URL:
             "Host": self.host,
             "Connection": "keep-alive",
             "User-Agent": "PythonBrowser",
+            "Accept-Encoding": "gzip",
         }
 
         request = f"GET {self.path} HTTP/1.1\r\n"
@@ -88,7 +90,7 @@ class URL:
         request += "\r\n"
         s.send(request.encode("utf-8"))
 
-        response = s.makefile("rb", encoding="utf-8", newline="\r\n")
+        response = s.makefile("rb", newline="\r\n")
         statusline = response.readline().decode()
         version, status, explanation = statusline.split(" ", 2)
 
@@ -100,12 +102,6 @@ class URL:
             header, value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
 
-        assert "transfer-encoding" not in response_headers
-        assert "content-encoding" not in response_headers
-        assert "content-length" in response_headers
-
-        length = int(response_headers["content-length"])
-
         match int(status):
             case 304:
                 pass
@@ -115,10 +111,30 @@ class URL:
                 if redirect_to.startswith("/"):
                     return URL(f"{self.origin}{redirect_to}").request()
                 return URL(redirect_to).request()
-                
 
-        content_bytes = response.read(length)
-        content = content_bytes.decode()
+        content_bytes = bytearray()
+        if "transfer-encoding" in response_headers:
+            if response_headers["transfer-encoding"] == "chunked":
+                while True:
+                    line = response.readline()
+                    length = int(line.decode().strip(), 16)
+                    if length == 0:
+                        break
+                    read_bytes = response.read(length)
+                    content_bytes.extend(read_bytes)
+                    response.read(2)
+            else:
+                return f"Processing Not Supported: {response_headers["transfer-encoding"]}"
+        elif response_headers["content-length"]:
+            length = int(response_headers["content-length"])
+            content_bytes = response.read(length)
+        else:
+            return "Processing Not Supported"
+
+        if "content-encoding" in response_headers and response_headers["content-encoding"] == "gzip":
+            content = gzip.decompress(content_bytes).decode()
+        else:
+            content = content_bytes.decode()
 
         if "cache-control" in response_headers:
             controls = response_headers["cache-control"].split(",")
@@ -126,7 +142,7 @@ class URL:
             for control in controls:
                 match control.casefold():
                     case max_age if max_age.startswith("max-age"):
-                        cache_storage.save(self.href, content_bytes, int(max_age.split("=", 1)[1]))
+                        cache_storage.save(self.href, bytes(content, "utf-8"), int(max_age.split("=", 1)[1]))
                     case "no-store":
                         pass
 
