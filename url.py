@@ -1,3 +1,4 @@
+from cache_storage import cache_storage
 import socket
 import ssl
 from consts import entities
@@ -7,6 +8,7 @@ connection_pool: dict[str, socket.socket] = {}
 
 class URL:
     def __init__(self, url: str):
+        self.href = url
         self.scheme, url = url.split(":", 1)
 
         # https://datatracker.ietf.org/doc/html/rfc3986
@@ -52,6 +54,10 @@ class URL:
             for entity, target in entities.items():
                 response = response.replace(target, entity)
             return response
+
+        existing_cache = cache_storage.load(self.href)
+        if existing_cache is not None:
+            return existing_cache.decode()
 
         s: socket.socket
 
@@ -113,5 +119,15 @@ class URL:
 
         content_bytes = response.read(length)
         content = content_bytes.decode()
+
+        if "cache-control" in response_headers:
+            controls = response_headers["cache-control"].split(",")
+
+            for control in controls:
+                match control.casefold():
+                    case max_age if max_age.startswith("max-age"):
+                        cache_storage.save(self.href, content_bytes, int(max_age.split("=", 1)[1]))
+                    case "no-store":
+                        pass
 
         return content
