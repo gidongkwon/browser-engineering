@@ -39,7 +39,8 @@ def load(url: URL):
 
 
 def main():
-    import os, sys
+    import os
+    import sys
 
     url = f"file:///{os.path.dirname(__file__)}/about.txt"
     if len(sys.argv) > 1:
