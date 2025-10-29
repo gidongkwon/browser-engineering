@@ -1,3 +1,4 @@
+from tkinter.constants import BOTH
 from url import URL
 from consts import entities
 import tkinter
@@ -16,8 +17,13 @@ class Browser:
             width=WIDTH,
             height=HEIGHT
         )
-        self.canvas.pack()
+        self.width = WIDTH
+        self.height = HEIGHT
+
+        self.canvas.pack(fill=BOTH, expand=True)
         self.scroll_y = 0
+
+        # Scroll events
         self.window.bind("<Down>", self.scroll)
         if platform.system() == "Linux":
             self.window.bind("<Button-4>", self.handle_linux_scrollup)
@@ -25,18 +31,23 @@ class Browser:
         else:
             self.window.bind("<MouseWheel>", self.handle_wheel)
 
+        # Resize event
+        self.window.bind("<Configure>", self.handle_configure)
+        
+
     def load(self, url: URL):
         body = url.request()
-        text = lex(body)
-        self.display_list = layout(text)
-        self.scroll_y_range = (0, self.display_list[-1][1] - HEIGHT)
+        self.text = lex(body)
+        self.layout(self.text)
+
+
         self.font = tkinter.font.Font(family="Noto Sans KR")
         self.draw()
 
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
-            if y > self.scroll_y + HEIGHT:
+            if y > self.scroll_y + self.height:
                 continue
             if y + VSTEP < self.scroll_y:
                 continue
@@ -44,7 +55,7 @@ class Browser:
     
     def scroll(self, delta=SCROLL_STEP, multiplier=1):
         self.scroll_y += delta * multiplier 
-        self.scroll_y = max(self.scroll_y_range[0], min(self.scroll_y, self.scroll_y_range[1]))
+        self.scroll_y = max(self.scroll_y_range[0], min(self.scroll_y, self.scroll_y_range[1] - self.height))
         self.draw()
 
     def handle_wheel(self, e: tkinter.Event):
@@ -64,24 +75,29 @@ class Browser:
     
     def handle_linux_scrolldown(self, e):
         self.scroll(multiplier=1)
-
     
-def layout(text: str):
-    display_list: list[tuple[int, int, str]] = []
-    cursor_x, cursor_y = HSTEP, VSTEP
-    for c in text:
-        if c == "\n":
-            cursor_y += int(VSTEP * 1.2)
-            cursor_x = HSTEP
-        
-        display_list.append((cursor_x, cursor_y, c))
-        cursor_x += HSTEP
+    def handle_configure(self, e: tkinter.Event):
+        self.width, self.height = e.width, e.height
+        self.layout(self.text)
+        self.scroll(delta=0) # redraw + scroll clipping
 
-        if cursor_x >= WIDTH - HSTEP:
-            cursor_y += VSTEP
-            cursor_x = HSTEP
+    def layout(self, text: str):
+        self.display_list: list[tuple[int, int, str]] = []
+        cursor_x, cursor_y = HSTEP, VSTEP
+        for c in text:
+            if c == "\n":
+                cursor_y += int(VSTEP * 1.2)
+                cursor_x = HSTEP
+            
+            self.display_list.append((cursor_x, cursor_y, c))
+            cursor_x += HSTEP
 
-    return display_list
+            if cursor_x >= self.width - HSTEP:
+                cursor_y += VSTEP
+                cursor_x = HSTEP
+
+        # top to top
+        self.scroll_y_range = (0, self.display_list[-1][1])
 
 
 def lookahead(string: str, index: int, count: int):
