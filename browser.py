@@ -59,16 +59,21 @@ class Browser:
         self.draw()
 
     def handle_wheel(self, e: tkinter.Event):
+        delta: int
         multiplier: int
         match platform.system():
             case "Windows":
+                delta = e.delta
                 multiplier = 1
             case "Darwin":
+                # On macOS, e.delta is scaled by 1: https://wiki.tcl-lang.org/page/mousewheel
+                delta = SCROLL_STEP
                 multiplier = -1
             case _:
+                delta = SCROLL_STEP
                 multiplier = 1
 
-        self.scroll(e.delta, multiplier)
+        self.scroll(delta, multiplier)
 
     def handle_linux_scrollup(self, e):
         self.scroll(multiplier=-1)
