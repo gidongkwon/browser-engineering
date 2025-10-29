@@ -1,9 +1,11 @@
+from tkinter import PhotoImage
 from tkinter.constants import BOTH
 from url import URL
 from consts import entities
 import tkinter
 import tkinter.font
 import platform
+import regex
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
@@ -12,6 +14,9 @@ SCROLLBAR_WIDTH = 10
 
 
 class Browser:
+    emoji_pattern = regex.compile(r"\p{Extended_Pictographic}", regex.UNICODE)
+    emoji_image_cache: dict[str, PhotoImage] = {}
+
     def __init__(self):
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
@@ -47,7 +52,18 @@ class Browser:
                 continue
             if y + VSTEP < self.scroll_y:
                 continue
-            self.canvas.create_text(x, y - self.scroll_y, text=c, font=self.font)
+            if self.emoji_pattern.match(c):
+                if c not in self.emoji_image_cache:
+                    self.emoji_image_cache[c] = PhotoImage(
+                        file=f"openmoji/{format(ord(c), '04X')}.png"
+                    ).subsample(3)
+                self.canvas.create_image(
+                    x,
+                    y - self.scroll_y,
+                    image=self.emoji_image_cache[c],
+                )
+            else:
+                self.canvas.create_text(x, y - self.scroll_y, text=c, font=self.font)
 
         # Scrollbar
         if self.needs_scrollbar():
@@ -146,6 +162,7 @@ def lex(body: str):
     text = ""
     in_tag = False
     index = 0
+
     while index < len(body):
         char = body[index]
         if char == "&":
