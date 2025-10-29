@@ -12,35 +12,44 @@ class URL:
         self.href = url
         self.scheme, url = url.split(":", 1)
 
-        # https://datatracker.ietf.org/doc/html/rfc3986
-        has_authority = url.startswith("//")
-        if has_authority:
-            url = url[2:]
+        try:
+            # https://datatracker.ietf.org/doc/html/rfc3986
+            has_authority = url.startswith("//")
+            if has_authority:
+                url = url[2:]
 
-            assert self.scheme in ["http", "https", "file"]
+                assert self.scheme in ["http", "https", "file"]
 
-            if "/" not in url:
-                url = url + "/"
-            self.host, url = url.split("/", 1)
-            self.path = "/" + url
-            self.port: int | None = None
+                if "/" not in url:
+                    url = url + "/"
+                self.host, url = url.split("/", 1)
+                self.path = "/" + url
+                self.port: int | None = None
 
-            if self.scheme == "http":
-                self.port = 80
-            elif self.scheme == "https":
-                self.port = 443
+                if self.scheme == "http":
+                    self.port = 80
+                elif self.scheme == "https":
+                    self.port = 443
 
-            if ":" in self.host:
-                self.host, port = self.host.split(":", 1)
-                self.port = int(port)
+                if ":" in self.host:
+                    self.host, port = self.host.split(":", 1)
+                    self.port = int(port)
 
-            self.origin = f"{self.scheme}://{self.host}{"" if self.port is None else f":{self.port}"}"
-        else:
-            assert self.scheme in ["data", "view-source"]
-            self.path = url
-            self.origin = f"{self.scheme}:{self.path}"
+                self.origin = f"{self.scheme}://{self.host}{'' if self.port is None else f':{self.port}'}"
+            else:
+                assert self.scheme in ["data", "view-source", "about"]
+                self.path = url
+                self.origin = f"{self.scheme}:{self.path}"
+        except AssertionError, ValueError:
+            self.href = "about:blank"
+            self.scheme, self.path = "about", "blank"
 
     def request(self) -> str:
+        if self.scheme == "about":
+            match self.path:
+                case "blank":
+                    return " "
+
         if self.scheme == "file":
             with open(self.path, "r") as file:
                 return file.read()
@@ -124,14 +133,19 @@ class URL:
                     content_bytes.extend(read_bytes)
                     response.read(2)
             else:
-                return f"Processing Not Supported: {response_headers["transfer-encoding"]}"
+                return (
+                    f"Processing Not Supported: {response_headers['transfer-encoding']}"
+                )
         elif response_headers["content-length"]:
             length = int(response_headers["content-length"])
             content_bytes = response.read(length)
         else:
             return "Processing Not Supported"
 
-        if "content-encoding" in response_headers and response_headers["content-encoding"] == "gzip":
+        if (
+            "content-encoding" in response_headers
+            and response_headers["content-encoding"] == "gzip"
+        ):
             content = gzip.decompress(content_bytes).decode()
         else:
             content = content_bytes.decode()
@@ -142,7 +156,11 @@ class URL:
             for control in controls:
                 match control.casefold():
                     case max_age if max_age.startswith("max-age"):
-                        cache_storage.save(self.href, bytes(content, "utf-8"), int(max_age.split("=", 1)[1]))
+                        cache_storage.save(
+                            self.href,
+                            bytes(content, "utf-8"),
+                            int(max_age.split("=", 1)[1]),
+                        )
                     case "no-store":
                         pass
 
