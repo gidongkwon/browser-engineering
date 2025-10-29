@@ -2,6 +2,7 @@ from url import URL
 from consts import entities
 import tkinter
 import tkinter.font
+import platform
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
@@ -16,28 +17,53 @@ class Browser:
             height=HEIGHT
         )
         self.canvas.pack()
-        self.scroll = 0
-        self.window.bind("<Down>", self.scrolldown)
+        self.scroll_y = 0
+        self.window.bind("<Down>", self.scroll)
+        if platform.system() == "Linux":
+            self.window.bind("<Button-4>", self.handle_linux_scrollup)
+            self.window.bind("<Button-5>", self.handle_linux_scrolldown)
+        else:
+            self.window.bind("<MouseWheel>", self.handle_wheel)
 
     def load(self, url: URL):
         body = url.request()
         text = lex(body)
         self.display_list = layout(text)
+        self.scroll_y_range = (0, self.display_list[-1][1] - HEIGHT)
         self.font = tkinter.font.Font(family="Noto Sans KR")
         self.draw()
 
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
-            if y > self.scroll + HEIGHT:
+            if y > self.scroll_y + HEIGHT:
                 continue
-            if y + VSTEP < self.scroll:
+            if y + VSTEP < self.scroll_y:
                 continue
-            self.canvas.create_text(x, y - self.scroll, text=c, font=self.font)
+            self.canvas.create_text(x, y - self.scroll_y, text=c, font=self.font)
     
-    def scrolldown(self, e):
-        self.scroll += SCROLL_STEP
+    def scroll(self, delta=SCROLL_STEP, multiplier=1):
+        self.scroll_y += delta * multiplier 
+        self.scroll_y = max(self.scroll_y_range[0], min(self.scroll_y, self.scroll_y_range[1]))
         self.draw()
+
+    def handle_wheel(self, e: tkinter.Event):
+        multiplier: int
+        match platform.system():
+            case "Windows":
+                multiplier = 1
+            case "Darwin":
+                multiplier = -1
+            case _:
+                multiplier = 1
+
+        self.scroll(e.delta, multiplier)
+
+    def handle_linux_scrollup(self, e):
+        self.scroll(multiplier=-1)
+    
+    def handle_linux_scrolldown(self, e):
+        self.scroll(multiplier=1)
 
     
 def layout(text: str):
