@@ -6,6 +6,7 @@ import tkinter
 import tkinter.font
 import platform
 import regex
+import argparse
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
@@ -17,7 +18,14 @@ class Browser:
     emoji_pattern = regex.compile(r"\p{Extended_Pictographic}", regex.UNICODE)
     emoji_image_cache: dict[str, PhotoImage] = {}
 
-    def __init__(self):
+    # identifies RTL letter runs (R, AL) with combining marks
+    rtl_pattern = regex.compile(
+        r"(?:[\p{bc=R}\p{bc=AL}](?:[\p{M}\p{bc=R}\p{bc=AL}])*)",
+        regex.UNICODE,
+    )
+
+    def __init__(self, direction="ltr"):
+        self.direction = direction
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
         self.document_width = WIDTH
@@ -129,21 +137,53 @@ class Browser:
 
     def layout(self, text: str):
         self.display_list: list[tuple[int, int, str]] = []
-        cursor_x, cursor_y = HSTEP, VSTEP
+        is_ltr = self.direction == "ltr"
+        LINE_START_X = HSTEP if is_ltr else self.document_width - HSTEP
+        CHAR_DELTA = HSTEP if is_ltr else -HSTEP
+        cursor_x = LINE_START_X
+        cursor_y = VSTEP
+
+        if not is_ltr:
+            text = self.reorder_text_for_rtl(text)
+
         for c in text:
             if c == "\n":
                 cursor_y += int(VSTEP * 1.2)
-                cursor_x = HSTEP
+                cursor_x = LINE_START_X
+                continue
 
             self.display_list.append((cursor_x, cursor_y, c))
-            cursor_x += HSTEP
+            cursor_x += CHAR_DELTA
 
-            if cursor_x >= self.document_width - HSTEP:
+            if (is_ltr and cursor_x >= self.document_width - HSTEP) or (
+                not is_ltr and cursor_x <= HSTEP
+            ):
                 cursor_y += VSTEP
-                cursor_x = HSTEP
+                cursor_x = LINE_START_X
 
         # top to top
         self.scroll_y_range = (0, self.display_list[-1][1])
+
+    def reorder_text_for_rtl(self, text: str) -> str:
+        # Heuristic bidi reordering for RTL paragraphs:
+        # 1) Reverse the whole line to preserve logical run order visually.
+        # 2) Reverse back RTL letter runs (R/AL) so they keep RTL orientation
+        #    when we place characters right-to-left.
+        lines = text.splitlines(True)
+
+        def reorder_line(line: str) -> str:
+            content = line.rstrip("\r\n")
+            suffix = line[len(content) :]
+            if not content:
+                return line
+
+            # 1) Reverse whole content to fix run order
+            rev = content[::-1]
+            # 2) Un-reverse RTL runs so they render correctly with RTL placement
+            rev = self.rtl_pattern.sub(lambda m: m.group(0)[::-1], rev)
+            return rev + suffix
+
+        return "".join(reorder_line(line) for line in lines)
 
     def needs_scrollbar(self):
         return self.scroll_y_range[1] > self.document_height
@@ -184,12 +224,18 @@ def lex(body: str):
 
 def main():
     import os
-    import sys
 
-    url = f"file:///{os.path.dirname(__file__)}/about.txt"
-    if len(sys.argv) > 1:
-        url = sys.argv[1]
-    Browser().load(URL(url))
+    parser = argparse.ArgumentParser(
+        "PythonBrowser",
+        "browser.py [url] [--direction=ltr]",
+    )
+    parser.add_argument(
+        "url", nargs="?", default=f"file:///{os.path.dirname(__file__)}/about.txt"
+    )
+    parser.add_argument("--direction", default="ltr")
+    args = parser.parse_args()
+
+    Browser(args.direction).load(URL(args.url))
     tkinter.mainloop()
 
 
