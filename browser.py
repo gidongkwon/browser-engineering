@@ -15,7 +15,7 @@ SCROLLBAR_WIDTH = 10
 
 
 class Browser:
-    emoji_pattern = regex.compile(r"\p{Extended_Pictographic}", regex.UNICODE)
+    emoji_pattern = regex.compile(r"\p{Emoji_Presentation}", regex.UNICODE)
     emoji_image_cache: dict[str, PhotoImage] = {}
 
     # identifies RTL letter runs (R, AL) with combining marks
